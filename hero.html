@@ -1,0 +1,166 @@
+<canvas id="canvas" width="500" height="200"></canvas>
+<input type="range" name="impulse" id="impulse-control" step="0.1" value="0" min="-12" max="0">
+<button id="jump-button">Jump</button>
+
+<script>
+const requestAnimFrame = (function(){
+  return window.requestAnimationFrame       ||
+      window.webkitRequestAnimationFrame ||
+      window.mozRequestAnimationFrame    ||
+      window.oRequestAnimationFrame      ||
+      window.msRequestAnimationFrame     ||
+      function(callback){
+          window.setTimeout(callback, 1000 / 60);
+      };
+})();
+
+function easeOutSine(x) {
+  return Math.sin((x * Math.PI) / 2);
+}
+
+function easeOutQuart(x) {
+    return 1 - Math.pow(1 - x, 4);
+}
+
+function easeOutBounce(x) {
+    const n1 = 7.5625;
+    const d1 = 2.75;
+
+    if (x < 1 / d1) {
+        return n1 * x * x;
+    } else if (x < 2 / d1) {
+        return n1 * (x -= 1.5 / d1) * x + 0.75;
+    } else if (x < 2.5 / d1) {
+        return n1 * (x -= 2.25 / d1) * x + 0.9375;
+    } else {
+        return n1 * (x -= 2.625 / d1) * x + 0.984375;
+    }
+}
+
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+const jumpButton = document.getElementById('jump-button');
+
+const impulseInput = document.getElementById('impulse-control');
+
+const gravity = 0.5;
+
+class Hero {
+    constructor(x, y, w, h) {
+        this.x = x;
+        this.y = y;
+        this.w = w;
+        this.h = h || w; // same as width if is not defined
+        
+        this.impulse = 0.0;
+        this.impulsing = false;
+        this.jumping = false;
+        this.velocityY = 0.0;
+
+        this.landingHit = 0;
+
+        this.floor = y;
+    }
+
+    jump() {
+        this.impulsing = false;
+
+        if (!this.jumping) {
+            this.jumping = true;
+            this.velocityY = this.impulse;
+        }
+
+        this.impulse = 0.0;
+    }
+
+    render(ctx) {
+        const heightDistortion = this.impulse || this.landingHit;
+        const widthDistortion = heightDistortion/3;
+
+        ctx.setTransform(1, 0, 0, 1, this.x + (Math.floor(widthDistortion/2)), this.y - heightDistortion);
+        ctx.fillStyle = 'blue';
+        ctx.fillRect(0, 0, this.w - widthDistortion, this.h + heightDistortion);
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+    }
+
+    update(dt) {
+        // apply gravity over our hero all the time
+        this.velocityY += gravity;
+        this.y += this.velocityY;
+
+        // land on the floor
+        if (this.y + this.h >= this.floor) {
+            if (this.jumping) this.landingHit = this.velocityY * -1;
+            
+            this.jumping = false;
+            this.velocityY = 0.0;
+            this.y = this.floor - this.h - 1;
+        }
+    
+        if (this.impulsing) {
+            this.impulse -= dt * 10;
+
+            if (this.impulse < -12.0) {
+                this.impulse = -12.0;
+            }
+        }
+
+        if (this.landingHit < 0) {
+            this.landingHit += dt * 70;
+
+            if (this.landingHit > 0) this.landingHit = 0;
+        }
+    }
+}
+
+const HERO_W = 12;
+const HERO_H = 16;
+
+const hero = new Hero((canvas.width / 2) - (HERO_W / 2), (canvas.height) - (HERO_H / 2), HERO_W, HERO_H);
+
+function draw() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    ctx.fillStyle = "black";
+    ctx.font = "16px monospace";
+    ctx.fillText(`fps: ${fps}`, 10, 10 + (16 * 1.5));
+    ctx.fillText(`impulse: ${hero.impulse}`, 10, 30 + (16 * 1.5));
+    ctx.fillText(`hit: ${hero.landingHit}`, 10, 50 + (16 * 1.5));
+    
+    hero.render(ctx);
+}
+
+function update(dt) {
+    hero.update(dt);
+}
+
+let lastTime;
+let animationId;
+let fps = 0;
+
+function loop(timeStamp) {
+    const dt = (timeStamp - lastTime) / 1000;
+    lastTime = timeStamp;
+
+    fps = Math.round(1 / dt);
+
+    draw();
+    update(dt);
+
+    // queue next frame
+    animationId = requestAnimFrame(this.loop.bind(this));
+}
+
+impulseInput.addEventListener('input', function(e) {
+    hero.impulse = Math.floor(this.valueAsNumber);
+});
+
+jumpButton.addEventListener('click', function(e) {
+    hero.jump();
+    impulseInput.value = 0;
+});
+
+lastTime = window.performance.now();
+loop();
+
+</script>
